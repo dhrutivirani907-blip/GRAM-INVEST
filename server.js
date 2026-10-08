@@ -28,6 +28,7 @@ const pool = new Pool({
 app.use(cors({ origin: FRONTEND_ORIGIN === '*' ? true : FRONTEND_ORIGIN }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.options('*', cors());
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -179,7 +180,9 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.get('/', (_req, res) => res.json({ status: 'Active', app: 'BONK Tap Backend' }));
+app.get('/', (_req, res) => res.json({ status: 'Active', app: 'VB Miner Backend', version: '2.0', uploadEndpoint: '/api/purchase', adminPanel: 'https://dhrutivirani907-blip.github.io/?admin=1' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'VB Miner Backend', version: '2.0' }));
+app.get('/admin', (_req, res) => res.redirect('https://dhrutivirani907-blip.github.io/?admin=1'));
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -188,6 +191,7 @@ app.get('/api/health', async (_req, res) => {
     res.status(500).json({ status: 'error', message: e.message });
   }
 });
+app.get('/health', (_req, res) => res.json({ status: 'ok', app: 'VB Miner Backend' }));
 app.get('/api/config', (_req, res) => res.json(CONFIG));
 
 app.post('/api/user/create', async (req, res) => {
