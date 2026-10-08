@@ -190,8 +190,15 @@ app.get('/api/health', async (_req, res) => {
 });
 app.get('/api/config', (_req, res) => res.json(CONFIG));
 
-app.post('/api/user/create', async (_req, res) => {
+app.post('/api/user/create', async (req, res) => {
   try {
+    const requested = cleanAppId(req.body?.appId);
+    if (requested) {
+      const existing = await getUser(requested);
+      if (existing) return res.json({ user: serializeUser(existing) });
+      const r = await pool.query('INSERT INTO vb_users (app_id) VALUES ($1) RETURNING *', [requested]);
+      return res.json({ user: serializeUser(r.rows[0]) });
+    }
     for (let i = 0; i < 5; i++) {
       const appId = makeAppId();
       try {
