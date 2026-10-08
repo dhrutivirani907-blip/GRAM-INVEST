@@ -108,13 +108,7 @@ $('gramHero').src=GRAM_LOGO.trim(); ['vbLogo1','vbLogo2','vbMinerLogo','convertV
 
 async function ensureUser(){
   let appId=localStorage.getItem('vb_app_id');
-  const d=await api('/api/user/create',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(appId?{appId}:{})
-  });
-  appId=d.user.appId;
-  localStorage.setItem('vb_app_id',appId);
+  if(!appId){const d=await api('/api/user/create',{method:'POST'});appId=d.user.appId;localStorage.setItem('vb_app_id',appId)}
   return appId;
 }
 async function syncUser(){
@@ -146,22 +140,14 @@ $('proofFile').onchange=()=>{const f=$('proofFile').files[0];if(!f)return;const 
 $('submitPurchase').onclick=async()=>{
   const f=$('proofFile').files[0];
   if(!f)return toast('Please select payment proof');
-  if(!state.user?.appId)return toast('App ID is still loading. Please wait a moment and try again.');
+  const fd=new FormData();
+  fd.append('appId',state.user.appId);
+  fd.append('proof',f);
   const btn=$('submitPurchase');
   btn.disabled=true;
   btn.textContent='SUBMITTING...';
   try{
-    const proofData=await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>reject(new Error('Could not read the selected photo'));
-      reader.readAsDataURL(f);
-    });
-    const d=await api('/api/purchase',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({appId:state.user.appId,proofData,proofType:f.type||'image/jpeg'})
-    });
+    const d=await api('/api/purchase',{method:'POST',body:fd});
     closeModal('purchaseModal');
     $('successRequestId').textContent=d.requestId||'SUBMITTED';
     openModal('successModal');
