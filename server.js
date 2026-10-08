@@ -179,7 +179,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.get('/', (_req, res) => res.json({ status: 'Active', app: 'VB Miner Backend', version: '1.0.0' }));
+app.get('/', (_req, res) => res.json({ status: 'Active', app: 'BONK Tap Backend' }));
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
