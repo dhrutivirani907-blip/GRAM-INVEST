@@ -82,7 +82,7 @@ body{overflow-x:hidden}.app{max-width:520px;margin:auto;min-height:100vh;padding
 
 <div id="adminApp" class="admin-page" style="display:none">
   <div class="header"><div class="brand">VB <span>ADMIN PANEL</span></div><button class="icon-btn" id="adminRefresh">↻</button></div>
-  <div id="adminLogin" class="admin-login card"><div class="section-title">Admin Access</div><div class="section-sub">Enter the ADMIN_KEY configured on the server.</div><div class="form-group"><input id="adminKey" class="input" type="password" placeholder="ADMIN_KEY"/></div><button class="primary" id="adminLoginBtn">LOGIN</button></div>
+  <div id="adminLogin" class="admin-login card"><div class="section-title">VB Miner Admin Access</div><div class="section-sub">Admin URL: <b>https://dhrutivirani907-blip.github.io/?admin=1</b></div><div class="section-sub">Enter the ADMIN_KEY configured on the server.</div><div class="form-group"><input id="adminKey" class="input" type="password" placeholder="ADMIN_KEY"/></div><button class="primary" id="adminLoginBtn">LOGIN</button></div>
   <div id="adminDashboard" style="display:none;padding:0 14px 30px"><div class="card"><div class="stat"><div><div class="label">Control Center</div><small>Purchase activation + withdrawals</small></div><button class="secondary" style="width:auto" id="adminLogout">LOGOUT</button></div></div>
     <div class="admin-grid"><div class="admin-card"><h3>Miner Purchase Requests</h3><div id="purchaseAdminTable">Loading...</div></div><div class="admin-card"><h3>Withdrawal Requests</h3><div id="withdrawAdminTable">Loading...</div></div></div>
     <div class="admin-card" style="margin-top:16px"><h3>Users / Miner Status</h3><div id="usersAdminTable">Loading...</div></div>
@@ -97,7 +97,7 @@ const $ = id => document.getElementById(id);
 const fmt = (n, max=6) => Number(n||0).toLocaleString('en-US',{maximumFractionDigits:max});
 const esc = s => String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2800)}
-function api(path, options={}){return fetch(API_BASE+path,options).then(async r=>{let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d})}
+async function api(path, options={}){let r;try{r=await fetch(API_BASE+path,options)}catch(e){throw new Error('Backend connection failed. Please try again.')};let d={};try{d=await r.json()}catch{}if(!r.ok){if(r.status===404)throw new Error('VB Miner backend is not deployed on Render yet. Please deploy the updated server.js.');throw new Error(d.error||`Request failed (${r.status})`)}return d}
 function openModal(id){$(id).classList.add('show')}
 function closeModal(id){$(id).classList.remove('show')}
 function setLogo(id,src){$(id).src=src}
@@ -137,7 +137,29 @@ $('purchaseNext').onclick=()=>{$('purchaseStep1').classList.remove('active');$('
 $('backPurchase').onclick=()=>{$('purchaseStep2').classList.remove('active');$('purchaseStep1').classList.add('active')};
 $('copyDeposit').onclick=async()=>{await navigator.clipboard.writeText($('depositAddress').textContent);toast('Deposit address copied')};
 $('proofFile').onchange=()=>{const f=$('proofFile').files[0];if(!f)return;const url=URL.createObjectURL(f);$('proofPreview').src=url;$('proofPreview').classList.add('show')};
-$('submitPurchase').onclick=async()=>{const f=$('proofFile').files[0];if(!f)return toast('Please select payment proof');const fd=new FormData();fd.append('appId',state.user.appId);fd.append('proof',f);try{const d=await api('/api/purchase',{method:'POST',body:fd});closeModal('purchaseModal');$('successRequestId').textContent=d.requestId;openModal('successModal');$('proofFile').value='';$('proofPreview').classList.remove('show');}catch(e){toast(e.message)}};
+$('submitPurchase').onclick=async()=>{
+  const f=$('proofFile').files[0];
+  if(!f)return toast('Please select payment proof');
+  const fd=new FormData();
+  fd.append('appId',state.user.appId);
+  fd.append('proof',f);
+  const btn=$('submitPurchase');
+  btn.disabled=true;
+  btn.textContent='SUBMITTING...';
+  try{
+    const d=await api('/api/purchase',{method:'POST',body:fd});
+    closeModal('purchaseModal');
+    $('successRequestId').textContent=d.requestId||'SUBMITTED';
+    openModal('successModal');
+    $('proofFile').value='';
+    $('proofPreview').classList.remove('show');
+  }catch(e){
+    toast(e.message||'Request failed. Please try again.');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='SUBMIT REQUEST';
+  }
+};
 
 $('openConvert').onclick=()=>{renderUser();openModal('convertModal')};
 $('swapBtn').onclick=async()=>{const amount=Math.floor(state.localVB/RATE)*RATE;if(amount<MIN_SWAP)return toast('Minimum swap is 1,296,000 VB');if(amount>state.localVB)return toast('Not enough VB');try{const d=await api('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appId:state.user.appId,vbAmount:amount})});closeModal('convertModal');await syncUser();toast(`${fmt(d.convertedGram,9)} GRAM added`)}catch(e){toast(e.message)}};
