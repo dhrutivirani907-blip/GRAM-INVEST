@@ -97,7 +97,13 @@ const $ = id => document.getElementById(id);
 const fmt = (n, max=6) => Number(n||0).toLocaleString('en-US',{maximumFractionDigits:max});
 const esc = s => String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2800)}
-function api(path, options={}){return fetch(API_BASE+path,options).then(async r=>{let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d})}
+async function api(path, options={}){
+  const r=await fetch(API_BASE+path,options);
+  let d={};
+  try{d=await r.json()}catch{}
+  if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);
+  return d;
+}
 function openModal(id){$(id).classList.add('show')}
 function closeModal(id){$(id).classList.remove('show')}
 function setLogo(id,src){$(id).src=src}
@@ -106,13 +112,36 @@ const VB_LOGO='data:image/webp;base64,UklGRgIkAQBXRUJQVlA4WAoAAAAQAAAA/wEA/wEAQU
 // Remove the intentional whitespace before the data URI payload.
 $('gramHero').src=GRAM_LOGO.trim(); ['vbLogo1','vbLogo2','vbMinerLogo','convertVBLogo'].forEach(id=>setLogo(id,VB_LOGO.trim())); setLogo('convertGramLogo',GRAM_LOGO.trim());
 
+function makeLocalAppId(){
+  const a=crypto?.randomUUID ? crypto.randomUUID().replaceAll('-','').slice(0,10).toUpperCase() : Math.random().toString(36).slice(2,12).toUpperCase();
+  return 'VB-'+a;
+}
 async function ensureUser(){
   let appId=localStorage.getItem('vb_app_id');
-  if(!appId){const d=await api('/api/user/create',{method:'POST'});appId=d.user.appId;localStorage.setItem('vb_app_id',appId)}
+  if(!appId){
+    try{
+      const d=await api('/api/user/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+      appId=d.user.appId;
+    }catch(e){
+      appId=makeLocalAppId();
+      if(!sessionStorage.getItem('vb_backend_notice')){toast('Backend is not connected. App ID created temporarily. Deploy the updated server.js.');sessionStorage.setItem('vb_backend_notice','1')}
+    }
+    localStorage.setItem('vb_app_id',appId);
+  }
   return appId;
 }
 async function syncUser(){
-  try{const appId=await ensureUser();const d=await api('/api/user/'+encodeURIComponent(appId));state.user=d.user;state.localVB=d.user.vbBalance;state.lastSync=Date.now();renderUser()}catch(e){toast(e.message)}}
+  const appId=await ensureUser();
+  try{
+    const d=await api('/api/user/'+encodeURIComponent(appId));
+    state.user=d.user;state.localVB=d.user.vbBalance;state.lastSync=Date.now();renderUser();
+  }catch(e){
+    if(!state.user){
+      state.user={appId,vbBalance:0,gramBalance:0,activeMiner:false,activeMiners:0,minerRemainingSeconds:0};
+      state.localVB=0;state.lastSync=Date.now();renderUser();
+    }
+  }
+}
 function renderUser(){
   const u=state.user;if(!u)return; $('appIdText').textContent=u.appId; $('modalAppId').textContent=u.appId;
   $('vbBalance').innerHTML=fmt(state.localVB)+' <span class="unit">VB</span>';
@@ -131,8 +160,15 @@ setInterval(syncUser,10000);
 function goTab(tab){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.querySelector('#'+tab).classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));if(tab==='withdraw')loadHistory()}
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>goTab(b.dataset.tab)));
 $('goInvest').onclick=()=>goTab('invest');
-$('copyAppId').onclick=async()=>{await navigator.clipboard.writeText(state.user.appId);toast('App ID copied')};
-$('buyNow').onclick=async()=>{if(state.user?.activeMiner)return toast('Your miner is already active.');$('depositAddress').textContent=(await api('/api/config')).DEPOSIT_ADDRESS;openModal('purchaseModal');$('purchaseStep1').classList.add('active');$('purchaseStep2').classList.remove('active')};
+$('copyAppId').onclick=async()=>{const id=state.user?.appId||localStorage.getItem('vb_app_id')||$('appIdText').textContent;if(!id||id==='Loading...')return toast('App ID is still loading');try{await navigator.clipboard.writeText(id);toast('App ID copied')}catch{toast(id)}};
+$('buyNow').onclick=async()=>{
+  if(state.user?.activeMiner)return toast('Your miner is already active.');
+  $('purchaseStep1').classList.add('active');$('purchaseStep2').classList.remove('active');
+  $('modalAppId').textContent=state.user?.appId||localStorage.getItem('vb_app_id')||'Loading...';
+  $('depositAddress').textContent='UQAtwnP7Qt-DsZ9iFMY9ruuGdPDUUIPxP9zJ6qsekS2oljWz';
+  openModal('purchaseModal');
+  try{const d=await api('/api/config');if(d.DEPOSIT_ADDRESS)$('depositAddress').textContent=d.DEPOSIT_ADDRESS}catch(e){/* keep built-in deposit address */}
+};
 $('purchaseNext').onclick=()=>{$('purchaseStep1').classList.remove('active');$('purchaseStep2').classList.add('active')};
 $('backPurchase').onclick=()=>{$('purchaseStep2').classList.remove('active');$('purchaseStep1').classList.add('active')};
 $('copyDeposit').onclick=async()=>{await navigator.clipboard.writeText($('depositAddress').textContent);toast('Deposit address copied')};
