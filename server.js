@@ -10,7 +10,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-admin-key']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
